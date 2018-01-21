@@ -37,13 +37,23 @@
 //********
 
 bmp180::bmp180(uint8_t i2c_addr)
+/*     ~~~~~~~~
+ * Constructor.
+ *
+ * Parameters:
+ *    i2c_addr [in]: i2c address of the sensor, defaults to 0x77.
+ */
 {
    i2c_address = i2c_addr;
-   temperatureRead = false;  // We first must read the temperature before reading the pressure
+   temperatureRead = false;         // We first must read the temperature before reading the pressure
+   currentPrecision = precisionLow; // Default precision
 }
 //----------------------------------------------------------
 
 bool bmp180::begin(void)
+/*          ~~~~~~~
+ * Initialize the bmp180 driver.
+ */
 {
    uint8_t chipId;
    Wire.begin();
@@ -59,28 +69,133 @@ bool bmp180::begin(void)
 //----------------------------------------------------------
 
 bool bmp180::readTemperature(double* temperature)
+/*          ~~~~~~~~~~~~~~~~~
+ * Read temperature.
+ * This is a blocking function, it will wait till the temperature conversion is complete.
+ *
+ * Parameters:
+ *    temperature[out]: The temperature as read by the sensor in 
+ *
+ * Return: true if successful, false if something went wrong (in that case temperature will be 0.0)
+ */
 {
-   uint8_t value[2];
-   double UT;   // MSB << 8 + LSB
-   double X1;   // (UT - AC6) * AC5 / 2^15
-   double X2;   // MC * 2^11 / (X1 + MD)
+   uint8_t value[2]; // MSB LSB
+   double UT;        // MSB << 8 + LSB
+   double X1;        // (UT - AC6) * AC5 / 2^15
+   double X2;        // MC * 2^11 / (X1 + MD)
 
+   *temperature = 0.0;
 
+   // Start the temperature reading
    sendCommand(cmd_readTemp);
+
+   // Wait for the conversion to finish
    if (!waitConversion(time_temp))   return false;  // Conversion failed
 
    // Read the temperature
-   readBytesFromAddress(reg_out_msb, 2, value);
+   if (!readBytesFromAddress(reg_out_msb, 2, value))   return false;
    UT = (int16_t) (value[0] << 8 | value[1]);
 
+   // Calculate the pressure
    X1 = (double) (UT - deviceData.calibrationData.cAC6) * deviceData.calibrationData.cAC5 / (1<<15);
    X2 = (double) deviceData.calibrationData.cMC * (1<<11) / (X1 + deviceData.calibrationData.cMD);
    B5 = X1 + X2;  // This result is needed for pressure conversion
-   *temperature = (B5 + 8) / (160);  // (B5 + 8) / 2^4 gives temperature in 0.1C
+   *temperature = (B5 + 8.0) / (160.0);  // (B5 + 8) / 2^4 gives temperature in 0.1C
 
    temperatureRead = true;
    return true;
 }
+//----------------------------------------------------------
+
+bool bmp180::readPressure(double* pressure, precisionSetting precision)
+/*          ~~~~~~~~~~~~~~
+ * Read pressure.
+ * This is a blocking function, it will wait till the pressure conversion is complete.
+ *
+ * Warning! for higher precisions this function can take a very long time (up to 26 ms).
+ *
+ * Parameters:
+ *    pressure [out]: The temperature as read by the sensor.
+ *    precision [in]: The required precision, one of bmp180::precisionSetting. Defaults to bmp180::precisionStandard (the set precision)
+ *
+ * Return: true if successful, false if something went wrong (in that case pressure will be 0.0)
+*/
+{
+   uint8_t  cmd;       // Command to send
+   uint8_t  oss;       // Oversampling
+   uint32_t maxTime;   // Maximum conversion time
+   uint8_t  value[3];  // MSB LSB XLSB
+   double   UP;        // (MSB << 16 + LSB << 8 + XLSB) >> (8-oss)
+   double   B3, B4, B6, B7;
+   double   X1, X2, X3;
+
+   *pressure = 0.0;
+
+   // We must have a temperature reading before reading a pressure
+   if (!temperatureRead)
+   {
+      double temperature;  // No need to keep the temperature, we need the intermediate result B5
+      if (!readTemperature(&temperature))   return false;
+   }
+
+   // Get the right command and maximum conversion time
+   if (precision == precisionStandard)    precision = currentPrecision;
+   switch(precision)    // An alternative would be to use a static const array in this file.
+   {
+      default:
+      case precisionLow:
+         oss = 0;
+         cmd = cmd_readPress0;
+         maxTime = time_press0;
+         break;
+      case precisionMedium:
+         oss = 1;
+         cmd = cmd_readPress1;
+         maxTime = time_press1;
+         break;
+      case precisionHigh:
+         oss = 2;
+         cmd = cmd_readPress2;
+         maxTime = time_press2;
+         break;
+      case precisionUltraHigh:
+         oss = 3;
+         cmd = cmd_readPress3;
+         maxTime = time_press3;
+         break;
+   }
+
+   // Start the pressure reading
+   sendCommand(cmd);
+
+   // Wait for the conversion to finish
+   if (!waitConversion(maxTime))   return false;  // Conversion failed
+
+   // Read the pressure
+   if (!readBytesFromAddress(reg_out_msb, 3, value))   return false;
+   UP = (uint32_t) (value[0] << 16 | value[1] << 8 | value[0]) >> (8 - oss);
+
+   // Calculate the pressure
+   B6 = B5 - 4000.0;   // B5 was stored during temperature reading
+   X1 = (double) deviceData.calibrationData.cB2 * (B6 * B6 / (1<<12));
+   X2 = (double) deviceData.calibrationData.cAC2 * B6;
+   X3 = (X1 + X2) / (1<<11);
+   B3 = (((deviceData.calibrationData.cAC1 * 4.0) + X3) * (1<<oss) + 2) / 4.0;
+   X1 = (double) deviceData.calibrationData.cAC3 * B6 / (1<<19);
+   X2 = (double) (deviceData.calibrationData.cB1 * (B6 * B6 / (1<<11))) / (2<<16);
+   X3 = (X1 + X2 + 2.0) / 4.0;
+   B4 = (double) deviceData.calibrationData.cAC4 * (X3 + 23768.0) / (1<<15);
+   B7 = (UP - B3) * (50000>>oss);
+   *pressure = B7 * 2.0 / B4;
+   X1 = *pressure / (1<<8);
+   X1 = (X1 * X1 + 3038.0) / (1<<16);
+   X2 = (-7357.0 * *pressure);
+   *pressure += (X1 +X2 + 3791.0) / (1<<4);
+
+   return true;
+}
+//----------------------------------------------------------
+
 
 //*********
 // private
@@ -159,9 +274,7 @@ bool bmp180::waitConversion(uint32_t maxTime)
    uint8_t  ctrl_meas;
 
    // Start by waiting, as this function is called directly after sending the command
-   Serial1.print("Delay: "); Serial1.print(leadMillis); Serial1.print("ms and "); Serial1.print(leadMicros); Serial1.println("us"); 
-   
-   if (leadMillis > 0)   delay(leadMillis);              // Avoid waiting 0 as this give unpredictable results
+   if (leadMillis > 0)   delay(leadMillis);              // Avoid waiting 0 as this gives unpredictable results
    if (leadMicros)       delayMicroseconds(leadMicros);
 
    startTime = micros();  // Now we start polling

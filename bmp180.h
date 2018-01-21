@@ -39,9 +39,21 @@
 class bmp180
 {
    public:
+      typedef enum
+      {
+         precisionLow,
+         precisionMedium,
+         precisionHigh,
+         precisionUltraHigh,
+         precisionStandard  // Use the set precision (stored in currentPrecision
+      } precisionSetting;
+
       bmp180(uint8_t i2c_addr = defaultI2C_address);
       bool begin();
       bool readTemperature(double* Temp);
+      bool readPressure(double* Pressure, precisionSetting precision = precisionStandard);
+
+   protected:
 
    private:
       static const uint8_t  defaultI2C_address = 0x77;
@@ -79,6 +91,8 @@ class bmp180
       uint8_t  i2c_address;
       bool     temperatureRead;
       double   B5;              // Temporary result from temperature conversion needed for pressure conversion
+
+      precisionSetting currentPrecision;  // Current precision. Can be changed by setPrecision.
 
       union
       {
