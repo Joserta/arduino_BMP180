@@ -63,8 +63,9 @@ bmp180::bmp180(uint8_t i2c_addr)
  */
 {
    i2c_address = i2c_addr;
-   temperatureRead = false;         // We first must read the temperature before reading the pressure
-   currentPrecision = precisionLow; // Default precision
+   temperatureRead    = false;         // We first must read the temperature before reading the pressure
+   currentPrecision   = precisionLow;  // Default precision
+   pressureAtSeaLevel = standardPressureAtSeaLevel;
 }
 //----------------------------------------------------------
 
@@ -83,6 +84,43 @@ bool bmp180::begin(void)
    // Get the calibration data
    if (!getCalibrationData())   return false;
    return true;
+}
+//----------------------------------------------------------
+
+void bmp180::setPrecision(precisionSetting precision)
+/*          ~~~~~~~~~~~~~~
+ * Set the precision for pressure readings.
+ * Note that higher precisions yield (a lot) higher conversion times.
+ *
+ * Parameters:
+ *    precision [in]: The desired precision (precisionLow...precisionUltraHigh)
+ */
+{
+   currentPrecision = precision;
+}
+//----------------------------------------------------------
+
+bmp180::precisionSetting bmp180::getPrecision()
+/*                              ~~~~~~~~~~~~~~
+ * Get the precision for pressure readings.
+ *
+ * Return: The current precision (precisionLow...precisionUltraHigh)
+ */
+{
+   return currentPrecision;
+}
+//----------------------------------------------------------
+
+void bmp180::resetSensor()
+/*          ~~~~~~~~~~~~~
+ * Reset the sensor
+ */
+{
+   Wire.beginTransmission(i2c_address);
+   Wire.write(reg_softReset);
+   Wire.write(cmd_softReset);
+   Wire.endTransmission();
+   delay(20);   // Give the sensor some time to recover
 }
 //----------------------------------------------------------
 
@@ -157,6 +195,24 @@ bool bmp180::readTemperature(int32_t* temperature)
 }
 //----------------------------------------------------------
 
+bool bmp180::readPressure(double* pressure)
+/*          ~~~~~~~~~~~~~~
+ * Read pressure.
+ * This is a blocking function, it will wait till the pressure conversion is complete.
+ * The precision set by setPrecsision is used, or the default precision if not set
+ *
+ * Warning! for higher precisions this function can take a very long time (up to 26 ms).
+ *
+ * Parameters:
+ *    pressure [out]: The pressure as read by the sensor in Pa.
+ *
+ * Return: true if successful, false if something went wrong (in that case pressure will be 0.0)
+*/
+{
+   return readPressure(pressure, currentPrecision);
+}
+//-------------------------------------------------
+
 bool bmp180::readPressure(double* pressure, precisionSetting precision)
 /*          ~~~~~~~~~~~~~~
  * Read pressure.
@@ -224,6 +280,24 @@ bool bmp180::readPressure(double* pressure, precisionSetting precision)
 }
 //----------------------------------------------------------
 
+bool bmp180::readPressure(int32_t* pressure)
+/*          ~~~~~~~~~~~~~~
+ * Read pressure.
+ * This is a blocking function, it will wait till the pressure conversion is complete.
+ * The precision set by setPrecsision is used, or the default precision if not set
+ *
+ * Warning! for higher precisions this function can take a very long time (up to 26 ms).
+ *
+ * Parameters:
+ *    pressure [out]: The pressure as read by the sensor in Pa.
+ *
+ * Return: true if successful, false if something went wrong (in that case pressure will be 0.0)
+ */
+{
+   return readPressure(pressure, currentPrecision);
+}
+//----------------------------------------------------------
+
 bool bmp180::readPressure(int32_t* pressure, precisionSetting precision)
 /*          ~~~~~~~~~~~~~~
  * Read pressure.
@@ -236,7 +310,7 @@ bool bmp180::readPressure(int32_t* pressure, precisionSetting precision)
  *    precision [in]: The required precision, one of bmp180::precisionSetting. Defaults to bmp180::precisionStandard (the set precision)
  *
  * Return: true if successful, false if something went wrong (in that case pressure will be 0.0)
-*/
+ */
 {
    uint8_t  oss;       // Oversampling
    uint8_t  value[3];  // MSB LSB XLSB
@@ -293,6 +367,130 @@ bool bmp180::readPressure(int32_t* pressure, precisionSetting precision)
 }
 //----------------------------------------------------------
 
+void bmp180::setPressureAtSeaLevel(double p0)
+/*          ~~~~~~~~~~~~~~~~~~~~~~~
+ * Set the pressure at sea-level.
+ * This function will set the current set pressure at sea level for all altitude calculations
+ *
+ * Note that this function does not use the sensor in any way.
+ *
+ * Parameters:
+ *    p [in]: The pressure as sea-level.
+ */
+{
+   pressureAtSeaLevel = p0;
+}
+//----------------------------------------------------------
+
+double bmp180::getPressureAtSeaLevel()
+/*            ~~~~~~~~~~~~~~~~~~~~~~~
+ * Get the current pressure at sea-level.
+ *
+ * Note that this function does not use the sensor in any way.
+ *
+ */
+{
+   return pressureAtSeaLevel;
+}
+//----------------------------------------------------------
+
+void bmp180::resetPressureAtSeaLevel()
+/*          ~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Reset the current pressure at sea-level.
+ *
+ * Note that this function does not use the sensor in any way.
+ *
+ */
+{
+   pressureAtSeaLevel = standardPressureAtSeaLevel;
+}
+//----------------------------------------------------------
+
+double bmp180::calculateAltitude(double p)
+/*            ~~~~~~~~~~~~~~~~~~~
+ * Calculate the altitude from the pressure.
+ * This function will use the current set pressure at sea level (or the default).
+ *
+ * Note that this function does not use the sensor in any way.
+ *
+ * Parameters:
+ *    p [in]: The pressure to convert to an altitude.
+ *
+ * Return: the altitude in m.
+ */
+{
+   return calculateAltitude(p, pressureAtSeaLevel);
+}
+//----------------------------------------------------------
+
+double bmp180::calculateAltitude(double p, double p0)
+/*            ~~~~~~~~~~~~~~~~~~~
+ * Calculate the altitude from the pressure.
+ *
+ * Note that this function does not use the sensor in any way.
+ *
+ * Parameters:
+ *    p  [in]: The pressure to convert to an altitude.
+ *    p0 [in]: The pressure at sea-level.
+ *
+ * Return: the altitude in m.
+ */
+{
+   return 44330.0 *(1.0 - pow(p/p0, 1.0/5.255));
+}
+//----------------------------------------------------------
+
+bool bmp180::readAltitude(double *altitude)
+/*          ~~~~~~~~~~~~~~
+ * Calculate the altitude from the sensor pressure.
+ * This function will use the current set pressure at sea level (or the default).
+ *
+ * Note that this function will first read the pressure (and if needed temperature) from the sensor.
+ *
+ * Parameters:
+ *    altitude [out]: Altitude in m.
+ *
+ * Return: true if successful, false if something went wrong (in that case altitude will be 0.0)
+ */
+{
+   return readAltitude(altitude, pressureAtSeaLevel);
+}
+
+//----------------------------------------
+bool bmp180::readAltitude(double *altitude, double p0)
+/*          ~~~~~~~~~~~~~~
+ * Calculate the altitude from the sensor pressure.
+ *
+ * Note that this function will first read the pressure (and if needed temperature) from the sensor.
+ *
+ * Parameters:
+ *    altitude [out]: Altitude in m.
+ *    p0        [in]: The pressure at sea-level.
+ */
+{
+   double pressure;
+
+   if (!readPressure(&pressure))   return false;
+   *altitude = calculateAltitude(pressure, p0);
+   return true;
+}
+//----------------------------------------------------------
+
+void bmp180::setAltitude(double altitude, double pressure)
+/*          ~~~~~~~~~~~~~
+ * Set the current altitude.
+ * This function will set the current pressure at sea level from a known altitude and a (measured) pressure.
+ *
+ * Note that this function does not use the sensor in any way.
+ *
+ * Parameters:
+ *    altitude [in]: Altitude in m.
+ *    pressure [in]: The pressure at altitude in Pa.
+ */
+{
+   pressureAtSeaLevel = pressure / pow(1.0 - altitude/44330.0, 1.0/5.255);
+}
+//----------------------------------------------------------
 
 
 //*********
@@ -304,7 +502,7 @@ bool bmp180::getCalibrationData()
  * Get the calibration data.
  *
  * Return: true if successful, false if something went wrong
-*/
+ */
 {
    uint8_t rawData[calibDataSize] = { 0 };
    uint8_t i = 0;
@@ -371,7 +569,6 @@ bool bmp180::readRawTemperature(int32_t* rawTemperature)
 }
 //----------------------------------------------------------
 
-
 bool bmp180::readRawPressure(int32_t* rawPressure, uint8_t* oss, precisionSetting precision)
 /*          ~~~~~~~~~~~~~~~~~
  * Read raw pressure.
@@ -394,7 +591,6 @@ bool bmp180::readRawPressure(int32_t* rawPressure, uint8_t* oss, precisionSettin
    *rawPressure = 0;
 
    // Get the right command and maximum conversion time
-   if (precision == precisionStandard)    precision = currentPrecision;
    switch(precision)    // An alternative would be to use a static const array in this file.
    {
       default:
@@ -524,6 +720,8 @@ void bmp180::sendCommand(uint8_t command)
 }
 //----------------------------------------------------------
 
+
+//*******************************************************************
 #else //  TEST_CODE   TEST_CODE   TEST_CODE   TEST_CODE   TEST_CODE
 // Insert simulated data
 
@@ -591,8 +789,6 @@ bool bmp180::readBytesFromAddress(uint8_t addr, uint8_t bytes, uint8_t* data)
             default:
                return false;
          }
-
-
    }
 
    return true;

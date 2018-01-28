@@ -49,27 +49,44 @@
 
 
 class bmp180
+//   ~~~~~~~~
 {
    public:
+//~~~~~~~~~
       typedef enum
       {
          precisionLow,
          precisionMedium,
          precisionHigh,
          precisionUltraHigh,
-         precisionStandard  // Use the set precision (stored in currentPrecision
       } precisionSetting;
 
       bmp180(uint8_t i2c_addr = defaultI2C_address);
       bool begin();
-      bool readTemperature(double* Temp);
-      bool readTemperature(int32_t* Temp);
-      bool readPressure(double* Pressure, precisionSetting precision = precisionStandard);
-      bool readPressure(int32_t* Pressure, precisionSetting precision = precisionStandard);
+      void resetSensor();
+      void setPrecision(precisionSetting precision);
+      precisionSetting getPrecision();
+      bool readTemperature(double* temp);
+      bool readTemperature(int32_t* temp);
+      bool readPressure(double* pressure);
+      bool readPressure(double* pressure, precisionSetting precision);
+      bool readPressure(int32_t* Pressure);
+      bool readPressure(int32_t* Pressure, precisionSetting precision);
+      void setPressureAtSeaLevel(double p0);
+      double getPressureAtSeaLevel();
+      void resetPressureAtSeaLevel();
+      double calculateAltitude(double p);
+      double calculateAltitude(double p, double p0);
+      bool readAltitude(double *altitude);
+      bool readAltitude(double *altitude, double p0);
+      void setAltitude(double altitude, double pressure);
+      
 
    protected:
+//~~~~~~~~~~~~
 
    private:
+//~~~~~~~~~~
       static const uint8_t  defaultI2C_address = 0x77;
 
       static const uint8_t  reg_out_xlsb    = 0xF8;
@@ -89,11 +106,11 @@ class bmp180
       static const uint8_t  cmd_readPress2  = 0xB4;  // Write to reg_ctrl_meas for pressure measurement with 4 times oversampling (oss=2). Takes max 13.5 ms
       static const uint8_t  cmd_readPress3  = 0xF4;  // Write to reg_ctrl_meas for pressure measurement with 8 times oversampling (oss=3). Takes max 25.5 ms
 
-      static const uint32_t time_temp       =  4500; // us
-      static const uint32_t time_press0     =  4500; // us
-      static const uint32_t time_press1     =  7500; // us
-      static const uint32_t time_press2     = 13500; // us
-      static const uint32_t time_press3     = 25500; // us
+      const uint32_t time_temp       =  4500; // us
+      const uint32_t time_press0     =  4500; // us
+      const uint32_t time_press1     =  7500; // us
+      const uint32_t time_press2     = 13500; // us
+      const uint32_t time_press3     = 25500; // us
 
       static const uint8_t  calibDataSize   = 0x16;  // 22 bytes calibration data
       static const uint8_t  deviceDataSize  = calibDataSize / 2;  // 11 words
@@ -102,11 +119,14 @@ class bmp180
       static const uint32_t pollingInterval =  120;   // Time in us to wait between polls for conversion done
       static const uint8_t  conversionBusy  = 1 << 5; // Bit 5 of reg_ctrl_meas is set while conversion is busy
 
+      const double   standardPressureAtSeaLevel = 101325.0;  // Standard sea-level pressure in Pa
+
       uint8_t  i2c_address;
       bool     temperatureRead;
       bool     temperatureReadDouble;
-      int32_t  B5;              // Temporary result from temperature conversion needed for pressure conversion
-      double   B5d;             // Temporary result from temperature conversion needed for pressure conversion
+      int32_t  B5;                  // Temporary result from temperature conversion needed for pressure conversion
+      double   B5d;                 // Temporary result from temperature conversion needed for pressure conversion
+      double   pressureAtSeaLevel;  // The pressure at sea level in Pa (default 101325.0 Pa)
 
       precisionSetting currentPrecision;  // Current precision. Can be changed by setPrecision.
 
