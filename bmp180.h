@@ -14,6 +14,18 @@
  *
  * This file is part of BMP180
  *
+ * Note: To calculate temperature and pressure the BMP180 datasheet uses integer calculations.
+ *       While this is definitely faster and decreases memory usage because there is no need to 
+ *       include the floating point library it will also significalty decrease the precision.
+ *       On page 15 of the datasheet there are floating point results, most likely left by accident.
+ *       If you only need temperature and/or pressure you can use the integer versions and save on
+ *       memory (and gain a little speed).
+ *       If you need altitude calculations you will include the floating point library anyway, so
+ *       there is nothing to gain from using the integer versions.
+ *       Note that mixing the integer and floating point versions of the functions is possible but
+ *       not recommended.
+ *
+ *
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -51,7 +63,9 @@ class bmp180
       bmp180(uint8_t i2c_addr = defaultI2C_address);
       bool begin();
       bool readTemperature(double* Temp);
+      bool readTemperature(int32_t* Temp);
       bool readPressure(double* Pressure, precisionSetting precision = precisionStandard);
+      bool readPressure(int32_t* Pressure, precisionSetting precision = precisionStandard);
 
    protected:
 
@@ -84,13 +98,15 @@ class bmp180
       static const uint8_t  calibDataSize   = 0x16;  // 22 bytes calibration data
       static const uint8_t  deviceDataSize  = calibDataSize / 2;  // 11 words
       static const uint8_t  bmp180_chipId   = 0x55;   // This value must be read from reg_chipId
-      static const uint32_t waitFraction    =   70;   // Percentage of maximum time to wait before starting to poll, e.g. (time_press3 * waitFraction) / 100 = (25500us * 70) / 100 = 17850us
+      static const uint32_t waitFraction    =   60;   // Percentage of maximum time to wait before starting to poll, e.g. (time_press3 * waitFraction) / 100 = (25500us * 60) / 100 = 15300us
       static const uint32_t pollingInterval =  120;   // Time in us to wait between polls for conversion done
       static const uint8_t  conversionBusy  = 1 << 5; // Bit 5 of reg_ctrl_meas is set while conversion is busy
 
       uint8_t  i2c_address;
       bool     temperatureRead;
-      double   B5;              // Temporary result from temperature conversion needed for pressure conversion
+      bool     temperatureReadDouble;
+      int32_t  B5;              // Temporary result from temperature conversion needed for pressure conversion
+      double   B5d;             // Temporary result from temperature conversion needed for pressure conversion
 
       precisionSetting currentPrecision;  // Current precision. Can be changed by setPrecision.
 
@@ -115,10 +131,12 @@ class bmp180
 
 
       bool getCalibrationData();
+      bool readRawTemperature(int32_t* rawTemperature);
+      bool readRawPressure(int32_t* rawPressure, uint8_t* oss, precisionSetting precision);
+      bool waitConversion(uint32_t maxTime);
       void writeByte(uint8_t b);
       bool readBytesFromAddress(uint8_t addr, uint8_t bytes, uint8_t* data);
       void sendCommand(uint8_t command);
-      bool waitConversion(uint32_t maxTime);
 };
 
 #endif // BMP180_H
