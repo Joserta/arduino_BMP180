@@ -1,0 +1,43 @@
+#######################################
+# Syntax Coloring Map For BMP180
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+bmp180      	KEYWORD1  bmp180
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+resetSensor 		    KEYWORD2
+setPrecision    	    KEYWORD2
+getPrecision		    KEYWORD2
+readTemperature		    KEYWORD2
+readPressure		    KEYWORD2
+setPressureAtSeaLevel	KEYWORD2
+getPressureAtSeaLevel   KEYWORD2
+resetPressureAtSeaLevel	KEYWORD2
+calculateAltitude		KEYWORD2
+readAltitude			KEYWORD2
+setAltitude 			KEYWORD2
+
+begin   				KEYWORD2
+
+#######################################
+# Instances (KEYWORD2)
+#######################################
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
+precisionSetting    LITERAL1
+precisionLow        LITERAL1
+precisionMedium     LITERAL1
+precisionHigh       LITERAL1
+precisionUltraHigh  LITERAL1
+
+

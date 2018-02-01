@@ -82,15 +82,16 @@ bool bmp180::begin(void)
    if (chipId != bmp180_chipId)  return false;
 
    // Get the calibration data
-   if (!getCalibrationData())   return false;
-   return true;
+   return getCalibrationData();
 }
 //----------------------------------------------------------
 
 void bmp180::setPrecision(precisionSetting precision)
 /*          ~~~~~~~~~~~~~~
  * Set the precision for pressure readings.
- * Note that higher precisions yield (a lot) higher conversion times.
+ *
+ * Note: Higher precisions yield (a lot) higher conversion times.
+ * Note: This function does not use the sensor in any way.
  *
  * Parameters:
  *    precision [in]: The desired precision (precisionLow...precisionUltraHigh)
@@ -103,6 +104,8 @@ void bmp180::setPrecision(precisionSetting precision)
 bmp180::precisionSetting bmp180::getPrecision()
 /*                              ~~~~~~~~~~~~~~
  * Get the precision for pressure readings.
+ *
+ * Note: This function does not use the sensor in any way.
  *
  * Return: The current precision (precisionLow...precisionUltraHigh)
  */
@@ -129,13 +132,15 @@ bool bmp180::readTemperature(double* temperature)
  * Read temperature.
  * This is a blocking function, it will wait till the temperature conversion is complete.
  *
+ * Note: Using this function will include the floating point library
+ *
  * Parameters:
  *    temperature[out]: The temperature as read by the sensor in C
  *
  * Return: true if successful, false if something went wrong (in that case temperature will be 0.0)
  */
 {
-   uint8_t value[2]; // MSB LSB
+   uint8_t value[2];  // MSB LSB
    int32_t UT;        // MSB << 8 + LSB
    double  X1;        // (UT - AC6) * AC5 / 2^15
    double  X2;        // MC * 2^11 / (X1 + MD)
@@ -201,7 +206,9 @@ bool bmp180::readPressure(double* pressure)
  * This is a blocking function, it will wait till the pressure conversion is complete.
  * The precision set by setPrecsision is used, or the default precision if not set
  *
- * Warning! for higher precisions this function can take a very long time (up to 26 ms).
+ * Warning: For higher precisions this function can take a very long time (up to 26 ms).
+ *
+ * Note: Using this function will include the floating point library
  *
  * Parameters:
  *    pressure [out]: The pressure as read by the sensor in Pa.
@@ -218,7 +225,9 @@ bool bmp180::readPressure(double* pressure, precisionSetting precision)
  * Read pressure.
  * This is a blocking function, it will wait till the pressure conversion is complete.
  *
- * Warning! for higher precisions this function can take a very long time (up to 26 ms).
+ * Warning: For higher precisions this function can take a very long time (up to 26 ms).
+ *
+ * Note: Using this function will include the floating point library
  *
  * Parameters:
  *    pressure [out]: The pressure as read by the sensor in Pa.
@@ -286,7 +295,7 @@ bool bmp180::readPressure(int32_t* pressure)
  * This is a blocking function, it will wait till the pressure conversion is complete.
  * The precision set by setPrecsision is used, or the default precision if not set
  *
- * Warning! for higher precisions this function can take a very long time (up to 26 ms).
+ * Warning: For higher precisions this function can take a very long time (up to 26 ms).
  *
  * Parameters:
  *    pressure [out]: The pressure as read by the sensor in Pa.
@@ -303,7 +312,7 @@ bool bmp180::readPressure(int32_t* pressure, precisionSetting precision)
  * Read pressure.
  * This is a blocking function, it will wait till the pressure conversion is complete.
  *
- * Warning! for higher precisions this function can take a very long time (up to 26 ms).
+ * Warning: For higher precisions this function can take a very long time (up to 26 ms).
  *
  * Parameters:
  *    pressure [out]: The pressure as read by the sensor in Pa.
@@ -372,7 +381,7 @@ void bmp180::setPressureAtSeaLevel(double p0)
  * Set the pressure at sea-level.
  * This function will set the current set pressure at sea level for all altitude calculations
  *
- * Note that this function does not use the sensor in any way.
+ * Note: This function does not use the sensor in any way.
  *
  * Parameters:
  *    p [in]: The pressure as sea-level.
@@ -386,8 +395,9 @@ double bmp180::getPressureAtSeaLevel()
 /*            ~~~~~~~~~~~~~~~~~~~~~~~
  * Get the current pressure at sea-level.
  *
- * Note that this function does not use the sensor in any way.
+ * Note: This function does not use the sensor in any way.
  *
+ * Return: The pressure at sea level in Pa.
  */
 {
    return pressureAtSeaLevel;
@@ -411,10 +421,11 @@ double bmp180::calculateAltitude(double p)
  * Calculate the altitude from the pressure.
  * This function will use the current set pressure at sea level (or the default).
  *
- * Note that this function does not use the sensor in any way.
+ * Note: Using this function will include the floating point library
+ * Note: This function does not use the sensor in any way.
  *
  * Parameters:
- *    p [in]: The pressure to convert to an altitude.
+ *    p [in]: The pressure to convert to an altitude (Pa).
  *
  * Return: the altitude in m.
  */
@@ -427,11 +438,12 @@ double bmp180::calculateAltitude(double p, double p0)
 /*            ~~~~~~~~~~~~~~~~~~~
  * Calculate the altitude from the pressure.
  *
- * Note that this function does not use the sensor in any way.
+ * Note: Using this function will include the floating point library
+ * Note: This function does not use the sensor in any way.
  *
  * Parameters:
- *    p  [in]: The pressure to convert to an altitude.
- *    p0 [in]: The pressure at sea-level.
+ *    p  [in]: The pressure to convert to an altitude (Pa).
+ *    p0 [in]: The pressure at sea-level (Pa).
  *
  * Return: the altitude in m.
  */
@@ -445,7 +457,8 @@ bool bmp180::readAltitude(double *altitude)
  * Calculate the altitude from the sensor pressure.
  * This function will use the current set pressure at sea level (or the default).
  *
- * Note that this function will first read the pressure (and if needed temperature) from the sensor.
+ * Note: This function will first read the pressure (and if needed temperature) from the sensor.
+ * Note: Using this function will include the floating point library
  *
  * Parameters:
  *    altitude [out]: Altitude in m.
@@ -461,11 +474,12 @@ bool bmp180::readAltitude(double *altitude, double p0)
 /*          ~~~~~~~~~~~~~~
  * Calculate the altitude from the sensor pressure.
  *
- * Note that this function will first read the pressure (and if needed temperature) from the sensor.
+ * Note: This function will first read the pressure (and if needed temperature) from the sensor.
+ * Note: Using this function will include the floating point library
  *
  * Parameters:
  *    altitude [out]: Altitude in m.
- *    p0        [in]: The pressure at sea-level.
+ *    p0        [in]: The pressure at sea-level (Pa).
  */
 {
    double pressure;
@@ -481,14 +495,15 @@ void bmp180::setAltitude(double altitude, double pressure)
  * Set the current altitude.
  * This function will set the current pressure at sea level from a known altitude and a (measured) pressure.
  *
- * Note that this function does not use the sensor in any way.
+ * Note: This function does not use the sensor in any way.
+ * Note: Using this function will include the floating point library
  *
  * Parameters:
  *    altitude [in]: Altitude in m.
  *    pressure [in]: The pressure at altitude in Pa.
  */
 {
-   pressureAtSeaLevel = pressure / pow(1.0 - altitude/44330.0, 1.0/5.255);
+   pressureAtSeaLevel = pressure / pow(1.0 - altitude/44330.0, 5.255);
 }
 //----------------------------------------------------------
 
@@ -574,7 +589,7 @@ bool bmp180::readRawPressure(int32_t* rawPressure, uint8_t* oss, precisionSettin
  * Read raw pressure.
  * This is a blocking function, it will wait till the pressure conversion is complete.
  *
- * Warning! for higher precisions this function can take a very long time (up to 26 ms).
+ * Warning: For higher precisions this function can take a very long time (up to 26 ms).
  *
  * Parameters:
  *    rawPressure [out]: The raw pressure as read by the sensor.
